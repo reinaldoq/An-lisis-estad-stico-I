@@ -1,0 +1,424 @@
+---
+title: "A2 - Análitica descriptiva e inferencial"
+author: "Reinaldo Quintero"
+date: '2022-04-02'
+output: 
+  html_document:
+    toc: true 
+    toc_depth: 3  
+    theme: united  
+    highlight: tango 
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+# 1. Lectura del fichero y preparación de los datos
+Leed el fichero CensusIncome_clean.csv y guardad los datos en un objeto con identificador denominado censo. A continuación, verificad que los datos se han cargado correctamente.
+
+```{r}
+censo <- read.csv('CensusIncome_clean.csv')
+
+head(censo)
+```
+
+# 2. Edad
+Para empezar el análisis, nos interesa conocer el valor medio de la edad del censo, a partir de los datos de la
+muestra. Para ello, calculad el intervalo de confianza de la media edad. Seguid los pasos que se especifican a
+continuación.
+
+## 2.1. Distribución de edades
+Visualizad gráficamente la distribución de la edad. Escoged el gráfico que sea más apropiado, considerando que se quiere conocer la distribución de la variable y si ésta sigue una distribución normal.
+
+```{r}
+library(gridExtra)
+library(ggplot2)
+library(ggpubr)
+
+g1 <-  ggplot(data=censo, aes(x=age)) +
+  geom_density(color="grey33", fill="dodgerblue", alpha=0.4)
+
+g2 <-  ggqqplot(censo$age)
+
+
+
+grid.arrange(g1, g2)
+```
+
+## 2.2. Normalidad
+¿Podemos asumir normalidad para el cálculo del intervalo de confianza de la media de edad? Argumentad la respuesta.
+
+> Con base en los gráficos mostrados si se puede asumir que no existe una distribución normal de la variable edad, sin embargo al ser una muestra lo suficientemente grande podemos fundamentar por el teorema del limite central que podemos tratar a la variable como normal.
+
+## 2.3. Intervalo de confianza
+Calculad manualmente el intervalo de confianza de la media de la variable age. Para ello, definid una función
+IC que reciba la variable, la confianza, y que devuelva un vector con los valores del intervalo de confianza
+
+```{r}
+IC <- function( x, alfa=0.05 ){ 
+  n <- length(x)
+  errorTipic <- sd(x) / sqrt( n ) 
+  errorTipic
+  
+  t<-qnorm( 1-alfa/2 ) 
+  t
+  error <- t * errorTipic 
+  error
+  return ( c( mean(x) - error, mean(x) + error ))
+  }
+```
+
+## 2.4. Cálculos
+Calculad el intervalo de confianza al 90 % y 95 %. Comparad los resultados.
+
+```{r}
+
+library(BSDA)
+
+IC( censo$age, alfa=0.05 )
+IC( censo$age, alfa=0.1 )
+
+```
+
+Validacion
+
+```{r}
+z.test(censo$age, sigma.x=sd(censo$age))
+
+```
+
+
+> Se puede observar que tanto la funcion construida como la propocionada de forma nativa por el paquete BSDA coinciden en sus resultados para el intervalo del 95% con lo que podemos asumir que la funcion es correcta.
+
+## 2.5. Interpretación
+Explicad cómo se interpreta el intervalo de confianza a partir de los resultados obtenidos.
+
+> El intervalo de confianza del 95% de la media poblacional de edad es (8.40277, 38.69698), esto significa que si se sacan multiples muestras de la pablacion, el 95% de las medias calculas estaran contenidas en los intervalos calculados.
+
+# 3. Salario
+Vamos a investigar ahora el salario de la población. En particular, nos preguntamos si en media, el salario de las personas Self-Employed es inferior al del resto de modalidades. Seguid los pasos que se especifican a continuación.
+
+## 3.1. Pregunta de investigación
+Formulad la pregunta de investigación.
+
+>Existen una diferncia significativa e inferior en las medias de salarios para la poblacion de self-employed en comparcion con el resto de modalidades?
+
+## 3.2. Hipótesis
+Escribid las hipótesis (hipótesis nula e hipótesis alternativa).
+
+>H0 : μSE = μnoSE
+
+>H1 : μSE < μnoSE
+
+## 3.3. Test a aplicar
+Explicad qué tipo de test podéis aplicar dada la pregunta de investigación planteada y las características de la muestra. Justificad vuestra elección.
+Nota: Podéis usar las funciones de R que consideréis necesarias para responder esta pregunta.
+
+>Aplicando el teorema del limite central, es posible asumir nomalidad de la variables ya que la muestra que disponemos es lo sufucientemente grande n=32,553 y se desea realizar un test sobre la media.
+Por tanto, aplicamos un test de hipótesis de dos muestras sobre la media. Aplicaremos la distribución t, dado que no se conoce la varianza de la población.
+Es necesario comprobar si podemos suponer varianzas iguales. Para ello, aplicamos el test var.test de R:
+
+```{r}
+var.test( censo$income[censo$workclass=="Self-Employed"], censo$income[censo$workclass!="Self-Employed"] )
+
+```
+
+>Se descarta la igualdad de varainzas de las poblaciones al tener una p<0.001. Podemos aplicar entonces un test de dos muestras independientes sobre la media con varianza desconocida y diferente.
+
+## 3.4. Cálculo
+Calculad el test usando una función propia. Implementad una función que realice el cálculo del test y que podáis usar con distintos valores de nivel de confianza.
+Calculad el contraste para un nivel de confianza del 95 % y del 90 %. Mostrad los resultados (valor observado, crítico y valor p) en una tabla.
+Nota: No se pueden usar funciones como t.test para el cálculo. Sí podéis usar otras funciones básicas de R como mean, qnorm, qt, pnorm, pt, etcétera.
+
+```{r}
+library('kableExtra')
+
+ttest <- function( x1, x2, CL=0.95 ){ 
+#z test 
+mean1 <- mean(x1)
+n1 <- length(x1)
+sd1 <- sd(x1)
+mean2 <- mean(x2) 
+n2 <- length(x2) 
+sd2 <- sd(x2)
+
+Sb <- sqrt( sd1^2/n1 + sd2^2/n2 )
+denom <- ( (sd1^2/n1)^2/(n1-1) + (sd2^2/n2)^2/(n2-1)) 
+df <- ( (sd1^2/n1 + sd2^2/n2)^2 ) / denom
+
+alfa <- (1-CL)
+t <- (mean1-mean2) / Sb
+
+tcritical <- qt( alfa, df, lower.tail=TRUE )
+pvalue <- pt( t, df, lower.tail=TRUE )
+
+result <- data.frame(t,tcritical,pvalue,df) 
+result %>% kable() %>% kable_styling() 
+return (result)
+}
+result <- ttest( censo$income[censo$workclass=="Self-Employed"], censo$income[censo$workclass!="Self-Employed"])
+result
+```
+
+Comprobamos la funcion
+```{r}
+t.test( censo$income[censo$workclass=="Self-Employed"], censo$income[censo$workclass!="Self-Employed"], var.equal=FALSE, alternative = "less")
+```
+
+
+## 3.5. Conclusión
+A partir de los resultados obtenidos, dad respuesta a la pregunta de investigación.
+
+>Con un 95% de confianza el valor critico es de -1.645145 mientras que el valor observado es de 6.88972	siendo que se rechaza la hipotesis nula, es decir, las personas que trabajan como autonomos ganan menos que las personas de las otras modalidades.
+
+# 4. Proporción de Self-Employed
+Nos preguntamos si el porcentaje de Self-Employed en la población es superior al 10%. Aplicad el test necesario para dar respuesta a esta pregunta. Seguid los pasos que se indican a continuación.
+
+## 4.1. Pregunta
+Formulad la pregunta de investigación que se plantea en esta sección.
+
+>El porcentaje de personas como modo de trabajo self-employed sera significativamente mayor al 10% en la poblacion?
+
+## 4.2. Hipótesis
+Escribid la hipótesis nula y la hipótesis alternativa.
+
+>H0 : p = 0.1
+
+>H1 : p > 0.1
+
+>donde p es la proporción de personas que trabajando como self-employed.
+
+## 4.3. Análisis visual
+Representad de forma gráfica la proporción de Self-Employed en la muestra.
+
+```{r}
+table(censo$workclass)
+```
+
+>Con esta data podemos generar el siguiente grafico.
+
+```{r}
+library(waffle)
+
+vals <- c('Government'=4349, "Other/Unknown"=1855, 'Private'=22692, 'Self-Employed'=3657)
+
+waffle((vals/32553)*100, row=7)
+```
+
+>En el grafico se aprecia que en proporcion con la poblacion la mayoria de tipo de empleo se ubica en el sector privado, seguido de empleo gubernamental, luego autonomos y finalmente otros tipos de empleo.
+
+## 4.4. Contraste
+Explicad qué tipo de contraste podéis aplicar dada la pregunta de investigación planteada y las características de la muestra. Justificad vuestra elección.
+
+>Se realiza un test de una muestra sobre la proporción. Se calcula la proporción de de autonmos en relacion con el total de la poblacion y se compruba si esa propocion es mayor al 0.10 con una significacion del 0.05.
+
+## 4.5. Cálculo
+Calculad el test usando una función propia. Podéis crear una función que reciba los parámetros necesarios y el nivel de confianza. Luego, calculad el contraste, llamando esta función, con nivel de confianza del 95 %. Mostrad los resultados (valor observado, crítico y valor p) en una tabla.
+Nota: No podéis usar prop.test o funciones ya implementadas en R. Sí podéis usar qnorm, qt, etcétera.
+
+
+```{r}
+
+pTest <- function(p, p0){
+
+  pobs <- (p - p0)/ sqrt( p0*(1-p0)/n)
+  
+  z <- qnorm( 0.05, lower.tail=FALSE )
+  
+  pvalue <- pnorm( pobs, lower.tail=FALSE )
+  cat("p=", p, "pobs=", pobs, "zcritical=", z, "pvalue=", pvalue)}
+
+
+n <- nrow( censo )
+p <- sum(censo$workclass == "Self-Employed") / n
+p0 <- 0.1
+
+pTest(p, p0)
+
+```
+
+Validacion
+
+```{r}
+prop.test( x=3657, n=32553, p=0.10, correct=FALSE, alternative="greater" )
+```
+
+## 4.6. Conclusión
+A partir de los resultados obtenidos, dad respuesta a la pregunta de investigación.
+
+>El valor critico para un alfa de 0.05 es de 1.644854 y el valor observado es de 7.421387, con este valor se puede rechazar la hipotesis nula.
+Se puede afirmar asi que con un 95% de confianza el porcentaje de personal self-employed sera mayor al 10% de la poblacion.
+
+# 5. Proporción de Self-Employed en mujeres y hombres
+Nos preguntamos si la proporción de Self-Employed es menor entre las mujeres que entre los hombres en la población. Para dar respuesta a esta pregunta, seguid los pasos que se indican a continuación.
+
+## 5.1. Pregunta de investigación
+Formulad la pregunta de investigación que se plantea en esta sección.
+
+>La proporcion de mujeres self-employed es menor al 0.5?
+
+## 5.2. Análisis visual
+Representad de forma gráfica la proporción de Self-Employed en la muestra de hombres y mujeres respectiva- mente.
+
+```{r}
+table(censo$workclass, censo$gender)
+```
+
+>Con esta data podemos generar el siguiente grafico.
+
+```{r}
+library(waffle)
+
+SE_by_gender <- c('f'=534, 'm'=3123)
+
+waffle((SE_by_gender/3657)*100, row=5)
+```
+>En el grrafico podemos observar que la mayroia de personas delf-employed son de genero asculino.
+
+## 5.3. Hipótesis
+Escribid la hipótesis nula y la hipótesis alternativa.
+
+>Ho: pM=pH
+
+>Hi: pM<pH
+
+>d
+
+
+## 5.4. Test
+Explicad qué tipo de test podéis aplicar dada la pregunta de investigación planteada y las características de la muestra. Justificad vuestra elección.
+
+>Se realiza un test de diferencias de dos grupos sobre la porporcion. 
+
+## 5.5. Cálculo
+Calculad el test usando una función propia. Al igual que en apartados anteriores, se recomienda definir una función que realice el cálculo y que reciba los parámetros necesarios.
+Calculad el contraste para un nivel de confianza del 97 %. Mostrad los resultados (valor observado, crítico y valor p) en una tabla.
+Nota: No podéis usar funciones como prop.test o funciones ya implementadas en R para el contraste. Sí podéis usar funciones básicas como qnorm, qt, etcétera.
+
+```{r}
+pdifTest <- function(femenino, masculino, femenino_pos, masculino_pos, confianza) {
+  
+  nFem <- length(femenino)
+  NMas <- length(masculino)
+  
+  pFem <- femenino_pos/nFem
+  pMas <- masculino_pos/NMas
+  
+  p <- (nFem*pFem + NMas*pMas) /(nFem+NMas)
+
+  q <- 1-p
+  alfa <- 1-confianza
+  
+  zObs <- (pFem - pMas) / (sqrt((p*q/nFem) + (p*q/NMas)))
+
+  zValue <- qnorm(alfa, lower.tail=TRUE)
+  pvalor <- pnorm(zObs, lower.tail=TRUE)
+  
+  cat("zobs=", as.numeric(zObs), "zcritical=", as.numeric(zValue), "pvalue=", as.numeric(pvalor))
+
+}
+
+femenino <- censo$gender[censo$gender == 'f']
+masculino <- censo$gender[censo$gender == 'm']
+femenino_pos <- 534
+masculino_pos <- 3123
+confianza <- 0.97
+
+pdifTest(femenino, masculino, femenino_pos, masculino_pos, confianza)
+
+```
+
+Validacion
+
+```{r}
+femenino <- length(censo$gender[censo$gender == 'f'])
+masculino <- length(censo$gender[censo$gender == 'm'])
+femenino_pos <- 534/femenino
+masculino_pos <- 3123/masculino
+confianza <- 0.97
+
+success <- c(femenino*femenino_pos,masculino*masculino_pos)
+n <- c(femenino,masculino)
+
+prop.test(success, n, alternative="less", correct=FALSE, conf.level = confianza)
+```
+
+## 5.6. Conclusión
+A partir de los resultados obtenidos, proporcionad una respuesta a la pregunta de investigación.
+
+>El valor critico es de 1.903638e-140 con lo que es siendo menor al alfa de 0.03 se puede rechazar la hipotesis nula.
+Se puede afirmar asi que con un 97% de confianza el procentaja de personas self-employed de genero femenino sera menor al de genero masculino.
+
+# 6. Dependencia Género - Self-Employed
+Otra forma de abordar si existen diferencias en la proporción de Self-Employed según el género es realizando un test de independencia de dos variables cualitativas. Concretamente, nos preguntamos si el género y ser Self-Employed están relacionadas o se pueden considerar variables independientes. Las variables serían independientes si el género no influye en la proporción de Self-Employed, es decir, si no hay diferencias en las proporciones de Self-Employed según el género.
+En esta sección se pide aplicar el test de independencia Chi cuadrado para evaluar si las variables género y Self-Employed son independientes. Seguid los pasos que se indican a continuación.
+
+## 6.1. Pregunta de investigación
+Formulad la pregunta de investigación.
+
+>Las variables género y Self-Employed están relacionadas?
+
+## 6.2. Hipótesis
+Escribid la hipótesis nula y alternativa.
+
+>H0 : las variables género y Self-Employed son independientes.
+
+>H1 : las variables género y Self-Employed están relacionadas.
+
+## 6.3. Test
+Describid brevemente en qué consiste el test chi cuadrado. Calculad la matriz de contingencia y mostrad sus valores.
+
+>El test de chi cuadrado se basa en el analisis de matrices de contingencia para determinar si dos variables son dependientes o independientes entre si. El analisis comparar una tabla de contingencia esperada si las variables son independientes vs la contingencia real para aceptar o rechazar la hipotesis nula.
+A continuacion la matriz de contigencia observada.
+
+```{r}
+censo$workclass[censo$workclass!="Self-Employed"] <- "No-Self-Employed"
+
+table(censo$workclass, censo$gender)
+```
+
+## 6.4. Cálculos
+Realizad los cálculos del test Chi cuadrado, implementando una función propia. Calculad el contraste para un nivel de confianza de 97 %.
+Nota: No podéis usar la función chisq.test de R. Sí podéis usar pchisq para consultar los valores de la distribución.
+
+```{r}
+chi2test <- function(obs_data){ 
+  sr <- rowSums(obs_data)
+  sc <- colSums(obs_data)
+  exp_data <- outer(sr, sc, "*")/sum(obs_data)
+  x2 <-sum((obs_data-exp_data)^2/exp_data)
+  pvalue <- pchisq(q=x2, df=(nrow(obs_data)-1)*(ncol(obs_data)-1), lower.tail = F)
+  cat("X2=", x2, 'pvalue=', pvalue)
+
+}
+
+data <- matrix(c(10233, 534, 
+                     18663, 3123),
+                     nrow = 2, 
+                     dimnames = list(
+                                     c("No-Self-Employed", "Self-Employed"),
+                                     c('f','m')))
+
+
+chi2test(data)
+
+
+```
+
+
+## 6.5. Conclusión
+Responded la pregunta de investigación planteada en este apartado. Relacionad el resultado con la aproximación de la sección anterior, donde se realiza un test sobre las proporciones.
+
+>El pvalor para un chi cuadrado de 635.1414 resulta ser 3.807275e-140 siendo bastantante menor de 0.03 con lo que rechanzamos la hipotesis nula, es decir confirmamos los resultados del test anterior siendo que las variables genero y self-employment si son dependientes entre si.
+
+# 7. Resumen y conclusiones
+Presentad una tabla con los resultados principales de cada sección: la pregunta de investigación planteada, los valores obtenidos del contraste y la conclusión obtenida en cada apartado. La tabla puede tener un formato como el que se muestra a continuación (se aporta un ejemplo para la primera fila de datos).
+
+| N | Pregunta                                                                                                                                               | Resultado (valor observa- do, crítico, valor p...)            | Conclusión                                                                                                                                                                                                                                                                                     |
+|---|--------------------------------------------------------------------------------------------------------------------------------------------------------|---------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| 2 | Intervalos de confianza al 90% y 95%                                                                                                                   | IC 95% =38.40277 38.69698IC 90% = 38.42642 38.67333           | El intervalo de confianza del 95% de la media poblacional de edad es (8.40277, 38.69698), esto significa que si se sacan multiples muestras de la pablacion, el 95% de las medias calculas estaran contenidas en los intervalos calculados.                                                    |
+| 3 | Existen una diferncia significativa e inferior en las medias de salarios para la poblacion de self-employed en comparcion con el resto de modalidades? | t = 6.88972, tcritical = -1.645145, pvalue = 1, df = 5239.124 | Con un 95% de confianza el valor critico es de -1.645145 mientras que el valor observado es de 6.88972 	siendo que se rechaza la hipotesis nula, es decir, las personas que trabajan como autonomos ganan menos que las personas de las otras modalidades.                                      |
+| 4 | El porcentaje de personas como modo de trabajo self-employed sera significativamente mayor al 10% en la poblacion?                                     | p= 0.1123399 pobs= 7.421387 zcritical= 1.644854 pvalue= 5.795014e-14     | El valor critico para un alfa de 0.05 es de 1.644854 y el valor observado es de 7.421387, con este valor se puede rechazar la hipotesis nula.  Se puede afirmar asi que con un 95% de confianza el porcentaje de personal self-employed sera mayor al 10% de la poblacion.                     |
+| 5 | La proporcion de mujeres self-employed es menor al 0.5?                                                                                                | p= zobs= -25.20201 zcritical= -1.880794 pvalue= 1.903638e-140   | El valor critico es de 1.903638e-140 con lo que es siendo menor al alfa de 0.03 se puede rechazar la hipotesis nula. Se puede afirmar asi que con un 97% de confianza el procentaja de personas self-employed de genero femenino sera menor al de genero masculino. |
+| 6 | Las variables género y Self-Employed están relacionadas?                                                                                               | X2= 635.1414 pvalue= 3.807275e-140                            | El pvalor para un chi cuadrado de 635.1414 resulta ser 3.807275e-140 siendo bastantante menor de 0.03 con lo que rechanzamos la hipotesis nula, es decir confirmamos los resultados del test anterior siendo que las variables genero y self-employment si son dependientes entre si.          |
